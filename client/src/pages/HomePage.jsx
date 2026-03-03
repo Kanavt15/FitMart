@@ -5,97 +5,7 @@ import Navbar from "../components/Navbar";
 import { signOut } from "firebase/auth";
 import { auth } from "../auth/firebase";
 
-/* ─── Mock Data ─────────────────────────────────────────── */
-const FEATURED_PRODUCTS = [
-  {
-    id: 1,
-    name: "Adjustable Dumbbell Set",
-    brand: "PowerFlex",
-    category: "Equipment",
-    price: 15999,
-    originalPrice: 15999,
-    rating: 4.8,
-    reviews: 214,
-    badge: "Best Seller",
-  },
-  {
-    id: 2,
-    name: "Whey Protein Isolate",
-    brand: "NutriCore",
-    category: "Nutrition",
-    price: 3299,
-    originalPrice: 3999,
-    rating: 4.9,
-    reviews: 531,
-    badge: "Verified",
-  },
-  {
-    id: 3,
-    name: "Resistance Band Kit",
-    brand: "FlexBand",
-    category: "Equipment",
-    price: 1499,
-    originalPrice: null,
-    rating: 4.7,
-    reviews: 88,
-    badge: null,
-  },
-  {
-    id: 4,
-    name: "Creatine Monohydrate",
-    brand: "NutriCore",
-    category: "Nutrition",
-    price: 1899,
-    originalPrice: 2299,
-    rating: 4.8,
-    reviews: 312,
-    badge: "Verified",
-  },
-  {
-    id: 5,
-    name: "Smart Fitness Watch",
-    brand: "VitalSync",
-    category: "Wearables",
-    price: 7999,
-    originalPrice: 9499,
-    rating: 4.6,
-    reviews: 167,
-    badge: "New",
-  },
-  {
-    id: 6,
-    name: "Yoga Mat Pro",
-    brand: "ZenFlow",
-    category: "Equipment",
-    price: 2199,
-    originalPrice: null,
-    rating: 4.7,
-    reviews: 95,
-    badge: null,
-  },
-  {
-    id: 7,
-    name: "Pre-Workout Formula",
-    brand: "NutriCore",
-    category: "Nutrition",
-    price: 2599,
-    originalPrice: 2999,
-    rating: 4.5,
-    reviews: 78,
-    badge: null,
-  },
-  {
-    id: 8,
-    name: "Pull-Up Bar",
-    brand: "IronGrip",
-    category: "Equipment",
-    price: 3499,
-    originalPrice: null,
-    rating: 4.8,
-    reviews: 203,
-    badge: "Best Seller",
-  },
-];
+/* Products are fetched from the server (MongoDB). */
 
 const CATEGORIES = [
   { name: "All", value: "all" },
@@ -232,7 +142,7 @@ export default function HomePage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch('/api/products');
+        const res = await fetch('http://localhost:5000/api/products');
         if (!res.ok) throw new Error('Failed to fetch products');
         const data = await res.json();
         // map productId -> id for compatibility with existing UI
@@ -271,7 +181,7 @@ export default function HomePage() {
   const cartTotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
   const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
 
-  const filtered = (products.length ? products : FEATURED_PRODUCTS).filter((p) => {
+  const filtered = products.filter((p) => {
     const matchCat = activeCategory === "all" || p.category === activeCategory;
     const matchSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.brand.toLowerCase().includes(searchQuery.toLowerCase());
     return matchCat && matchSearch;

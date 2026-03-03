@@ -151,9 +151,18 @@ function ProductCard({ product, onAdd }) {
     <div className="group bg-white border border-stone-100 rounded-2xl overflow-hidden hover:border-stone-200 hover:shadow-lg transition-all duration-300">
       {/* Image placeholder */}
       <div className="relative bg-stone-100 aspect-square flex items-center justify-center overflow-hidden">
-        <div className="text-5xl opacity-20 select-none group-hover:scale-110 transition-transform duration-500">
-          {product.category === "Nutrition" ? "🧴" : product.category === "Wearables" ? "⌚" : "🏋️"}
-        </div>
+        {product.image ? (
+          <img
+            src={product.image}
+            alt={product.name}
+            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+            onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; }}
+          />
+        ) : (
+          <div className="text-5xl opacity-20 select-none group-hover:scale-110 transition-transform duration-500">
+            {product.category === "Nutrition" ? "🧴" : product.category === "Wearables" ? "⌚" : "🏋️"}
+          </div>
+        )}
         {product.badge && (
           <span className="absolute top-3 left-3 text-[10px] tracking-widest uppercase bg-stone-900 text-white px-2.5 py-1 rounded-full">
             {product.badge}
@@ -209,6 +218,7 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
   const [visible, setVisible] = useState(false);
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     setTimeout(() => setVisible(true), 80);
@@ -218,6 +228,22 @@ export default function HomePage() {
     });
     return () => unsub();
   }, [navigate]);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch('/api/products');
+        if (!res.ok) throw new Error('Failed to fetch products');
+        const data = await res.json();
+        // map productId -> id for compatibility with existing UI
+        const mapped = data.map((p) => ({ ...p, id: p.productId || p.id }));
+        setProducts(mapped);
+      } catch (err) {
+        console.error('Error loading products:', err);
+      }
+    }
+    load();
+  }, []);
 
   const handleSignOut = async () => {
     await signOut(auth);
@@ -245,7 +271,7 @@ export default function HomePage() {
   const cartTotal = cart.reduce((sum, i) => sum + i.price * i.qty, 0);
   const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
 
-  const filtered = FEATURED_PRODUCTS.filter((p) => {
+  const filtered = (products.length ? products : FEATURED_PRODUCTS).filter((p) => {
     const matchCat = activeCategory === "all" || p.category === activeCategory;
     const matchSearch = !searchQuery || p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.brand.toLowerCase().includes(searchQuery.toLowerCase());
     return matchCat && matchSearch;
@@ -519,8 +545,12 @@ export default function HomePage() {
             <div className="flex flex-col gap-4">
               {cart.map((item) => (
                 <div key={item.id} className="flex gap-4 items-start py-4 border-b border-stone-100 last:border-0">
-                  <div className="w-14 h-14 bg-stone-100 rounded-xl flex items-center justify-center text-xl shrink-0">
-                    {item.category === "Nutrition" ? "🧴" : item.category === "Wearables" ? "⌚" : "🏋️"}
+                  <div className="w-14 h-14 bg-stone-100 rounded-xl flex items-center justify-center text-xl shrink-0 overflow-hidden">
+                    {item.image ? (
+                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.style.display = 'none'; }} />
+                    ) : (
+                      (item.category === "Nutrition" ? "🧴" : item.category === "Wearables" ? "⌚" : "🏋️")
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs text-stone-400">{item.brand}</p>

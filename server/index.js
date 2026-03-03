@@ -12,6 +12,10 @@ app.use(express.json());
 
 const productsRoute = require('./routes/products');
 app.use('/api/products', productsRoute);
+const cartRoute = require('./routes/cart');
+app.use('/api/cart', cartRoute);
+const ordersRoute = require('./routes/orders');
+app.use('/api/orders', ordersRoute);
 
 app.get('/', (req, res) => res.send('FitMart server running'));
 

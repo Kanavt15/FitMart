@@ -167,6 +167,30 @@ export default function HomePage() {
     return () => unsub();
   }, [navigate]);
 
+  // Load persisted cart for authenticated user
+  useEffect(() => {
+    async function loadCartFromServer(u) {
+      try {
+        const res = await fetch(`http://localhost:5000/api/cart/${u.uid}`);
+        if (!res.ok) return;
+        const cartDoc = await res.json();
+        // Map cartDoc.items (productId, quantity) to full product objects
+        const mapped = cartDoc.items.map((it) => {
+          const prod = products.find(p => Number(p.productId) === Number(it.productId));
+          if (!prod) return { id: it.productId, qty: it.quantity, name: 'Unknown', price: 0 };
+          return { ...prod, id: prod.id || prod.productId, qty: it.quantity };
+        });
+        setCart(mapped);
+      } catch (err) {
+        console.error('Error loading cart from server', err);
+      }
+    }
+
+    if (user && products.length > 0) {
+      loadCartFromServer(user);
+    }
+  }, [user, products]);
+
   useEffect(() => {
     async function load() {
       setLoading(true);
@@ -201,6 +225,31 @@ export default function HomePage() {
   };
 
   const addToCart = (product) => {
+    // If user is authenticated, persist to server cart
+    if (user) {
+      (async () => {
+        try {
+          const res = await fetch(`http://localhost:5000/api/cart/${user.uid}/add`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productId: product.productId || product.id, quantity: 1 }),
+          });
+          if (!res.ok) throw new Error('Failed to add to cart');
+          const cartDoc = await res.json();
+          const mapped = cartDoc.items.map((it) => {
+            const prod = products.find(p => Number(p.productId) === Number(it.productId));
+            if (!prod) return { id: it.productId, qty: it.quantity, name: 'Unknown', price: 0 };
+            return { ...prod, id: prod.id || prod.productId, qty: it.quantity };
+          });
+          setCart(mapped);
+        } catch (err) {
+          console.error('Add to cart failed', err);
+        }
+      })();
+      return;
+    }
+
+    // fallback: local-only cart when not authenticated
     setCart((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) return prev.map((i) => i.id === product.id ? { ...i, qty: i.qty + 1 } : i);
@@ -208,9 +257,67 @@ export default function HomePage() {
     });
   };
 
-  const removeFromCart = (id) => setCart((prev) => prev.filter((i) => i.id !== id));
+  const removeFromCart = (id) => {
+    if (user) {
+      (async () => {
+        try {
+          const existing = cart.find(i => i.id === id);
+          const qty = existing?.qty || 1;
+          const res = await fetch(`http://localhost:5000/api/cart/${user.uid}/remove`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productId: id, quantity: qty }),
+          });
+          if (!res.ok) throw new Error('Failed to remove from cart');
+          const cartDoc = await res.json();
+          const mapped = cartDoc.items.map((it) => {
+            const prod = products.find(p => Number(p.productId) === Number(it.productId));
+            if (!prod) return { id: it.productId, qty: it.quantity, name: 'Unknown', price: 0 };
+            return { ...prod, id: prod.id || prod.productId, qty: it.quantity };
+          });
+          setCart(mapped);
+        } catch (err) {
+          console.error('Remove from cart failed', err);
+        }
+      })();
+      return;
+    }
+
+    setCart((prev) => prev.filter((i) => i.id !== id));
+  };
 
   const updateQty = (id, delta) => {
+    if (user) {
+      (async () => {
+        try {
+          if (delta > 0) {
+            await fetch(`http://localhost:5000/api/cart/${user.uid}/add`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ productId: id, quantity: delta }),
+            });
+          } else {
+            await fetch(`http://localhost:5000/api/cart/${user.uid}/remove`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ productId: id, quantity: Math.abs(delta) }),
+            });
+          }
+          // refresh cart from server
+          const res = await fetch(`http://localhost:5000/api/cart/${user.uid}`);
+          if (!res.ok) throw new Error('Failed to fetch cart');
+          const cartDoc = await res.json();
+          const mapped = cartDoc.items.map((it) => {
+            const prod = products.find(p => Number(p.productId) === Number(it.productId));
+            if (!prod) return { id: it.productId, qty: it.quantity, name: 'Unknown', price: 0 };
+            return { ...prod, id: prod.id || prod.productId, qty: it.quantity };
+          });
+          setCart(mapped);
+        } catch (err) {
+          console.error('Update qty failed', err);
+        }
+      })();
+      return;
+    }
+
     setCart((prev) =>
       prev
         .map((i) => i.id === id ? { ...i, qty: i.qty + delta } : i)

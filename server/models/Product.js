@@ -12,6 +12,10 @@ const ProductSchema = new mongoose.Schema(
     reviews: { type: Number, default: 0 },
     badge: { type: String, default: null },
     image: { type: String, default: '' },
+    // total stock available (optional). If null, stock is not enforced.
+    stock: { type: Number, default: null },
+    // quantity reserved by carts (sum of quantities currently in carts)
+    reserved: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

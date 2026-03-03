@@ -1,0 +1,113 @@
+const express = require('express');
+const router = express.Router();
+const Cart = require('../models/Cart');
+const Product = require('../models/Product');
+
+// Helper: adjust product reserved count
+async function adjustReserved(productId, delta) {
+  const prod = await Product.findOne({ productId: Number(productId) });
+  if (!prod) throw new Error('Product not found');
+  prod.reserved = Math.max(0, (prod.reserved || 0) + delta);
+  await prod.save();
+  return prod;
+}
+
+// GET /api/cart/:userId - get or create cart for user
+router.get('/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    let cart = await Cart.findOne({ userId });
+    if (!cart) {
+      cart = await Cart.create({ userId, items: [] });
+    }
+    res.json(cart);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/cart/:userId/add - body: { productId, quantity }
+router.post('/:userId/add', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { productId, quantity } = req.body;
+    if (!productId || !quantity) return res.status(400).json({ error: 'productId and quantity required' });
+
+    const product = await Product.findOne({ productId: Number(productId) });
+    if (!product) return res.status(404).json({ error: 'Product not found' });
+
+    const available = product.stock == null ? Infinity : (product.stock - (product.reserved || 0));
+    if (available < quantity) return res.status(400).json({ error: 'Insufficient stock available' });
+
+    // upsert cart
+    let cart = await Cart.findOne({ userId });
+    if (!cart) cart = new Cart({ userId, items: [] });
+
+    const itemIdx = cart.items.findIndex(i => i.productId === Number(productId));
+    if (itemIdx >= 0) {
+      cart.items[itemIdx].quantity += Number(quantity);
+    } else {
+      cart.items.push({ productId: Number(productId), quantity: Number(quantity) });
+    }
+
+    // reserve stock
+    await adjustReserved(productId, Number(quantity));
+
+    await cart.save();
+    res.json(cart);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/cart/:userId/remove - body: { productId, quantity }
+router.post('/:userId/remove', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { productId, quantity } = req.body;
+    if (!productId || !quantity) return res.status(400).json({ error: 'productId and quantity required' });
+
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
+
+    const itemIdx = cart.items.findIndex(i => i.productId === Number(productId));
+    if (itemIdx === -1) return res.status(404).json({ error: 'Item not in cart' });
+
+    const removeQty = Math.min(cart.items[itemIdx].quantity, Number(quantity));
+    cart.items[itemIdx].quantity -= removeQty;
+    if (cart.items[itemIdx].quantity <= 0) cart.items.splice(itemIdx, 1);
+
+    // release reserved stock
+    await adjustReserved(productId, -removeQty);
+
+    await cart.save();
+    res.json(cart);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DELETE /api/cart/:userId - clear cart and release reserved stock
+router.delete('/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const cart = await Cart.findOne({ userId });
+    if (!cart) return res.status(404).json({ error: 'Cart not found' });
+
+    // release all reserved quantities
+    for (const item of cart.items) {
+      await adjustReserved(item.productId, -item.quantity);
+    }
+
+    cart.items = [];
+    await cart.save();
+    res.json({ success: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+module.exports = router;

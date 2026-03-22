@@ -129,44 +129,61 @@ router.post("/clear-cart", async (req, res) => {
   }
 });
 
-/**
- * @route   POST /demo-success
- * @desc    Simulates a successful payment for testing only — skips Razorpay, generates
- *          a fake paymentId, creates an order, and marks it as "paid"; body: { userId }
- * @access  Public — TESTING ONLY, remove before going live
- */
-router.post("/demo-success", async (req, res) => {
-  try {
-    const { userId } = req.body;
-    if (!userId) return res.status(400).json({ error: "userId is required" });
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /demo-success   ← DEV / TEST ONLY — disabled in production
+// Body: { userId }
+// Skips Razorpay entirely, fakes a payment ID, clears cart, returns success.
+// ─────────────────────────────────────────────────────────────────────────────
 
-    const fakePaymentId = `pay_DEMO_${Date.now()}`;
+if (process.env.NODE_ENV !== "production") {
+  console.warn(
+    "⚠️  /demo-success payment endpoint is registered — this route must NOT be available in production."
+  );
 
-    const Order = require("../models/Order");
+  /**
+   * @route   POST /demo-success
+   * @desc    Simulates a successful payment for testing only — skips Razorpay, generates
+   *          a fake paymentId, creates an order, and marks it as "paid"; body: { userId }
+   * @access  Public — TESTING ONLY, remove before going live
+   */
+  router.post("/demo-success", async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (!userId) return res.status(400).json({ error: "userId is required" });
 
-    // prevent duplicate
-    const existingOrder = await Order.findOne({ paymentId: fakePaymentId });
-    if (existingOrder) {
-      return res.json({ success: true, message: "Order already exists" });
+      router.post("/demo-success", async (req, res) => {
+        try {
+          const { userId } = req.body;
+          if (!userId) return res.status(400).json({ error: "userId is required" });
+
+          const fakePaymentId = `pay_DEMO_${Date.now()}`;
+
+          const Order = require("../models/Order");
+
+          // prevent duplicate
+          const existingOrder = await Order.findOne({ paymentId: fakePaymentId });
+          if (existingOrder) {
+            return res.json({ success: true, message: "Order already exists" });
+          }
+
+          // create order
+          const orderResponse = await axios.post("http://localhost:5000/api/orders", {
+            userId
+          });
+
+          // attach payment id
+          await Order.findByIdAndUpdate(orderResponse.data._id, {
+            paymentId: fakePaymentId,
+            status: "paid"
+          });
+
+          res.json({ success: true, order: orderResponse.data });
+
+        } catch (err) {
+          console.error("demo-success error:", err);
+          res.status(500).json({ error: err.message });
+        }
+      });
     }
-
-    // create order
-    const orderResponse = await axios.post("http://localhost:5000/api/orders", {
-      userId
-    });
-
-    // attach payment id
-    await Order.findByIdAndUpdate(orderResponse.data._id, {
-      paymentId: fakePaymentId,
-      status: "paid"
-    });
-
-    res.json({ success: true, order: orderResponse.data });
-
-  } catch (err) {
-    console.error("demo-success error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 module.exports = router;
